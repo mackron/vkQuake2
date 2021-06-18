@@ -22,6 +22,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include <setjmp.h>
 
+#define C89THREAD_IMPLEMENTATION
+#include "../external/c89thread/c89thread.h"
+
 #define	MAXPRINTMSG	8192
 
 #define MAX_NUM_ARGVS	50
@@ -1114,17 +1117,35 @@ typedef struct zhead_s
 
 zhead_t		z_chain;
 int		z_count, z_bytes;
+c89mtx_t z_lock;    /* Required because of miniaudio and it's asynchronous resource management. */
+qboolean z_lock_initialized = false;
+
+void Z_Lock()
+{
+    if (!z_lock_initialized) {
+        c89mtx_init(&z_lock, c89mtx_plain);
+        z_lock_initialized = true;
+    }
+
+    c89mtx_lock(&z_lock);
+}
+
+void Z_Unlock()
+{
+    assert(z_lock_initialized); /* Should have been initialized in Z_Lock(). */
+    c89mtx_unlock(&z_lock);
+}
 
 /*
 ========================
-Z_Free
+Z_Free_NoLock
 ========================
 */
-void Z_Free (void *ptr)
+void Z_Free_NoLock(void* ptr)
 {
-	zhead_t	*z;
+    zhead_t	*z;
 
-	z = ((zhead_t *)ptr) - 1;
+    z = ((zhead_t *)ptr) - 1;
 
 	if (z->magic != Z_MAGIC)
 		Com_Error (ERR_FATAL, "Z_Free: bad magic");
@@ -1135,6 +1156,20 @@ void Z_Free (void *ptr)
 	z_count--;
 	z_bytes -= z->size;
 	free (z);
+}
+
+/*
+========================
+Z_Free
+========================
+*/
+void Z_Free (void *ptr)
+{
+    Z_Lock(&z_lock);
+    {
+	    Z_Free_NoLock(ptr);
+    }
+    Z_Unlock(&z_lock);
 }
 
 
@@ -1157,12 +1192,16 @@ void Z_FreeTags (int tag)
 {
 	zhead_t	*z, *next;
 
-	for (z=z_chain.next ; z != &z_chain ; z=next)
-	{
-		next = z->next;
-		if (z->tag == tag)
-			Z_Free ((void *)(z+1));
-	}
+    Z_Lock(&z_lock);
+    {
+	    for (z=z_chain.next ; z != &z_chain ; z=next)
+	    {
+		    next = z->next;
+		    if (z->tag == tag)
+			    Z_Free_NoLock ((void *)(z+1));
+	    }
+    }
+    Z_Unlock(&z_lock);
 }
 
 /*
@@ -1174,21 +1213,25 @@ void *Z_TagMalloc (int size, int tag)
 {
 	zhead_t	*z;
 	
-	size = size + sizeof(zhead_t);
-	z = malloc(size);
-	if (!z)
-		Com_Error (ERR_FATAL, "Z_Malloc: failed on allocation of %i bytes",size);
-	memset (z, 0, size);
-	z_count++;
-	z_bytes += size;
-	z->magic = Z_MAGIC;
-	z->tag = tag;
-	z->size = size;
+    Z_Lock(&z_lock);
+    {
+	    size = size + sizeof(zhead_t);
+	    z = malloc(size);
+	    if (!z)
+		    Com_Error (ERR_FATAL, "Z_Malloc: failed on allocation of %i bytes",size);
+	    memset (z, 0, size);
+	    z_count++;
+	    z_bytes += size;
+	    z->magic = Z_MAGIC;
+	    z->tag = tag;
+	    z->size = size;
 
-	z->next = z_chain.next;
-	z->prev = &z_chain;
-	z_chain.next->prev = z;
-	z_chain.next = z;
+	    z->next = z_chain.next;
+	    z->prev = &z_chain;
+	    z_chain.next->prev = z;
+	    z_chain.next = z;
+    }
+    Z_Unlock(&z_lock);
 
 	return (void *)(z+1);
 }
@@ -1201,6 +1244,58 @@ Z_Malloc
 void *Z_Malloc (int size)
 {
 	return Z_TagMalloc (size, 0);
+}
+
+/*
+========================
+Z_TagRealloc
+========================
+*/
+void *Z_TagRealloc (void *ptr, int size, int tag)
+{
+    int psize;
+	zhead_t	*z = ((zhead_t*)ptr - 1);
+	
+    Z_Lock(&z_lock);
+    {
+        psize = z->size;
+
+        z_count--;
+	    z_bytes -= psize;
+
+	    size = size + sizeof(zhead_t);
+	    z = realloc(z, size);
+	    if (!z)
+		    Com_Error (ERR_FATAL, "Z_Realloc: failed on allocation of %i bytes",size);
+
+        if (psize < size) {
+	        memset ((byte*)z + psize + sizeof(zhead_t), 0, size - psize);
+        }
+
+	    z_count++;
+	    z_bytes += size;
+	    z->magic = Z_MAGIC;
+	    z->tag = tag;
+	    z->size = size;
+
+	    z->next = z_chain.next;
+	    z->prev = &z_chain;
+	    z_chain.next->prev = z;
+	    z_chain.next = z;
+    }
+    Z_Unlock(&z_lock);
+
+	return (void *)(z+1);
+}
+
+/*
+========================
+Z_Realloc
+========================
+*/
+void *Z_Realloc (void *ptr, int size)
+{
+	return Z_TagRealloc (ptr, size, 0);
 }
 
 
