@@ -19,6 +19,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // snd_loc.h -- private sound functions
 
+/* Implemented in snd_miniaudio.c */
+#include "../external/miniaudio/miniaudio.h"
+#include "../external/miniaudio/research/miniaudio_engine.h"
+
 // !!! if this is changed, the asm code must change !!!
 typedef struct
 {
@@ -28,6 +32,10 @@ typedef struct
 
 typedef struct
 {
+	// For miniaudio mixer
+	ma_resource_manager_data_source ds;
+
+	// For DMA mixer
 	int 		length;
 	int 		loopstart;
 	int 		speed;			// not needed, because converted on load?
@@ -122,6 +130,9 @@ void	SNDDMA_BeginPainting (void);
 void	SNDDMA_Submit(void);
 
 //====================================================================
+#define SOUND_LOOPATTENUATE	0.003
+
+extern int sound_started;
 
 #define	MAX_CHANNELS			32
 extern	channel_t   channels[MAX_CHANNELS];
@@ -162,3 +173,74 @@ channel_t *S_PickChannel(int entnum, int entchannel);
 
 // spatializes a channel
 void S_Spatialize(channel_t *ch);
+
+void S_TransformFilePath (char* dst, int dstCap, const char* name);
+void S_FreePlaysound (playsound_t *ps);
+
+
+/*
+===============================================================================
+BEGIN MINIAUDIO MIXING
+===============================================================================
+*/
+#include "../external/miniaudio/miniaudio.h"
+#include "../external/miniaudio/research/miniaudio_engine.h"
+
+extern cvar_t *s_mixer;
+extern cvar_t *s_latency;
+
+typedef struct
+{
+	ma_sound sound;		/* The miniaudio sound. */
+	int entnum;
+	int entchannel;
+	qboolean active;	/* When set to false, the sound is available for use. */
+	qboolean autosound;
+	qboolean fixed_origin;
+	vec3_t origin;      /* Only used if fixed_origin is true. */
+    sfx_t* sfx;         /* Only really required for autosounds. Used to check if an entity number has been recycled between subsequent frames. */
+} sndma_sound_t;
+
+extern int g_autosoundIndex[MAX_EDICTS];	/* Indexed with the entity number. When > 0, represents a 1-based index into g_persistentSounds. */
+extern sndma_sound_t g_sounds[MAX_CHANNELS];
+
+
+typedef enum
+{
+	sound_mixer_dma,		/* Original DMA mixer. */
+	sound_mixer_miniaudio	/* miniaudio mixer via ma_engine. */
+} sound_mixer_t;
+
+/* Retrieves the mixer type based on the config variable "s_mixer". */
+sound_mixer_t S_Mixer (void);
+
+
+/* Initializes the miniaudio mixer. */
+qboolean SNDMA_Init (void);
+
+/* Shuts down the miniaudio mixer. */
+void SNDMA_Shutdown (void);
+
+/* Activates or deactivates the audio system. This is just a pause and resume, not an uninit/reinit. */
+void SNDMA_Activate (qboolean active);
+
+/* Called every frame to update the audio system. */
+void SNDMA_Update (vec3_t origin, vec3_t forward, vec3_t right, vec3_t up);
+
+/* Stops all sounds. */
+void SNDMA_StopAllSounds (void);
+
+/* Get's the current audio time. Used for scheduling sounds. */
+int SNDMA_GetTime (void);
+
+/* Called when a sound needs to be loaded by the resource manager. */
+sfxcache_t* SNDMA_LoadSound (sfx_t *sfx, const char* name);
+
+/* For outputting raw audio data. This is used for cinematics and is called from S_RawSamples(). */
+void SNDMA_RawSamples (int samples, int rate, int width, int channels, byte *data);
+
+/*
+===============================================================================
+END MINIAUDIO MIXING
+===============================================================================
+*/

@@ -29,17 +29,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #  define MA_NO_JACK
 #endif
 
-#define DR_FLAC_IMPLEMENTATION
-#include "miniaudio/dr_flac.h"  /* Enables FLAC decoding. */
-#define DR_MP3_IMPLEMENTATION
-#include "miniaudio/dr_mp3.h"   /* Enables MP3 decoding. */
-#define DR_WAV_IMPLEMENTATION
-#include "miniaudio/dr_wav.h"   /* Enables WAV decoding. */
-
 #include "miniaudio/stb_vorbis.c" /* Enables OGG/Vorbis decoding. */
 
+#define MA_EXPERIMENTAL__DATA_LOOPING_AND_CHAINING
 #define MINIAUDIO_IMPLEMENTATION
-#include "miniaudio.h"
+#include "../external/miniaudio/miniaudio.h"
+#include "../external/miniaudio/research/miniaudio_engine.h"
 
 #include "../client/client.h"
 
@@ -215,8 +210,16 @@ static ma_result LoadTrack(const char *gamedir, int track)
 	do
 	{
 		char trackPath[64];
+
+		// Try [gamedir]/music first.
 		Com_sprintf(trackPath, sizeof(trackPath), "%s/music/track%s%i.%s", gamedir, track < 10 ? "0" : "", track, trackExts[trackExtIdx]);
 		result = ma_decoder_init_file(trackPath, NULL, &decoder);
+
+		// Try "music" in the base directory, which is where the music is located for the GoG version.
+		if (result != MA_SUCCESS) {
+			Com_sprintf(trackPath, sizeof(trackPath), "music/track%s%i.%s", track < 10 ? "0" : "", track, trackExts[trackExtIdx]);
+			result = ma_decoder_init_file(trackPath, NULL, &decoder);
+		}
 	} while (result != MA_SUCCESS && ++trackExtIdx < 4);
 
 	return result;

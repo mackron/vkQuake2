@@ -90,6 +90,15 @@ void ResampleSfx (sfx_t *sfx, int inrate, int inwidth, byte *data)
 }
 
 //=============================================================================
+void S_TransformFilePath (char* dst, int dstCap, const char* name)
+{
+    if (name[0] == '#') {
+		strcpy(dst, &name[1]);
+    } else {
+		Com_sprintf (dst, dstCap, "sound/%s", name);
+    }
+}
+
 
 /*
 ==============
@@ -122,50 +131,51 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 	else
 		name = s->name;
 
-	if (name[0] == '#')
-		strcpy(namebuffer, &name[1]);
-	else
-		Com_sprintf (namebuffer, sizeof(namebuffer), "sound/%s", name);
+	S_TransformFilePath(namebuffer, sizeof(namebuffer), name);
 
 //	Com_Printf ("loading %s\n",namebuffer);
 
-	size = FS_LoadFile (namebuffer, (void **)&data);
+	if (S_Mixer() == sound_mixer_dma) {
+		size = FS_LoadFile (namebuffer, (void **)&data);
 
-	if (!data)
-	{
-		Com_DPrintf ("Couldn't load %s\n", namebuffer);
-		return NULL;
-	}
+		if (!data)
+		{
+			Com_DPrintf ("Couldn't load %s\n", namebuffer);
+			return NULL;
+		}
 
-	info = GetWavinfo (s->name, data, size);
-	if (info.channels != 1)
-	{
-		Com_Printf ("%s is a stereo sample\n",s->name);
-		FS_FreeFile (data);
-		return NULL;
-	}
+		info = GetWavinfo (s->name, data, size);
+		if (info.channels != 1)
+		{
+			Com_Printf ("%s is a stereo sample\n",s->name);
+			FS_FreeFile (data);
+			return NULL;
+		}
 
-	stepscale = (float)info.rate / dma.speed;	
-	len = info.samples / stepscale;
+		stepscale = (float)info.rate / dma.speed;	
+		len = info.samples / stepscale;
 
-	len = len * info.width * info.channels;
+		len = len * info.width * info.channels;
 
-	sc = s->cache = Z_Malloc (len + sizeof(sfxcache_t));
-	if (!sc)
-	{
-		FS_FreeFile (data);
-		return NULL;
-	}
+		sc = s->cache = Z_Malloc (len + sizeof(sfxcache_t));
+		if (!sc)
+		{
+			FS_FreeFile (data);
+			return NULL;
+		}
 	
-	sc->length = info.samples;
-	sc->loopstart = info.loopstart;
-	sc->speed = info.rate;
-	sc->width = info.width;
-	sc->stereo = info.channels;
+		sc->length = info.samples;
+		sc->loopstart = info.loopstart;
+		sc->speed = info.rate;
+		sc->width = info.width;
+		sc->stereo = info.channels;
 
-	ResampleSfx (s, sc->speed, sc->width, data + info.dataofs);
+		ResampleSfx (s, sc->speed, sc->width, data + info.dataofs);
 
-	FS_FreeFile (data);
+		FS_FreeFile (data);
+	} else {
+		SNDMA_LoadSound(s, namebuffer);
+	}
 
 	return sc;
 }

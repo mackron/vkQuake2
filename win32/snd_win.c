@@ -843,19 +843,23 @@ between a deactivate and an activate.
 */
 void S_Activate (qboolean active)
 {
-	if ( active )
-	{
-		if ( pDS && cl_hwnd && snd_isdirect )
+	if (S_Mixer() == sound_mixer_dma) {
+		if ( active )
 		{
-			DS_CreateBuffers();
+			if ( pDS && cl_hwnd && snd_isdirect )
+			{
+				DS_CreateBuffers();
+			}
 		}
-	}
-	else
-	{
-		if ( pDS && cl_hwnd && snd_isdirect )
+		else
 		{
-			DS_DestroyBuffers();
+			if ( pDS && cl_hwnd && snd_isdirect )
+			{
+				DS_DestroyBuffers();
+			}
 		}
+	} else {
+		SNDMA_Activate(active);
 	}
 }
 
