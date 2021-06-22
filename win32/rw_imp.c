@@ -55,7 +55,7 @@ void VID_CreateWindow( int width, int height, int stylebits )
 	vid_fullscreen = ri.Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE );
 
 	if ( vid_fullscreen->value )
-		exstyle = WS_EX_TOPMOST;
+		exstyle = 0; //WS_EX_TOPMOST;
 	else
 		exstyle = 0;
 
