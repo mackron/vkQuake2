@@ -338,7 +338,7 @@ static qboolean SNDMA_ActivateSound (sndma_sound_t *snd, sndma_activation_t *pro
 
     S_TransformFilePath(path, sizeof(path), props->sfx->name);
 
-    result = ma_sound_init_from_file(&g_audioEngine, path, MA_SOUND_FLAG_DECODE /*| MA_SOUND_FLAG_NO_SPATIALIZATION*/, NULL, &snd->sound);  /* NO_SPATIALIZATION for testing. */
+    result = ma_sound_init_from_file(&g_audioEngine, path, MA_SOUND_FLAG_DECODE /*| MA_SOUND_FLAG_NO_SPATIALIZATION*/, NULL, NULL, &snd->sound);  /* NO_SPATIALIZATION for testing. */
     if (result != MA_SUCCESS) {
         return false;
     }
@@ -689,9 +689,34 @@ int SNDMA_GetTime (void)
 	return (int)ma_engine_get_time(&g_audioEngine);
 }
 
+
+static qboolean g_isAudioFenceInitialized = false;
+static ma_fence g_audioFence;
+
+void SNDMA_BeginRegistration (void)
+{
+	if (!g_isAudioFenceInitialized) {
+		if (ma_fence_init(&g_audioFence) == MA_SUCCESS) {
+			g_isAudioFenceInitialized = true;
+		}
+	}
+}
+
+void SNDMA_EndRegistration (void)
+{
+	if (g_isAudioFenceInitialized) {
+		ma_fence_wait(&g_audioFence);
+		ma_fence_uninit(&g_audioFence);
+		g_isAudioFenceInitialized = false;
+		
+	}
+}
+
 sfxcache_t* SNDMA_LoadSound (sfx_t *sfx, const char* name)
 {
 	ma_result result;
+	ma_pipeline_notifications notifications;
+	qboolean waitForFullDecode = true;
 	sfxcache_t *sc;
 
 	sc = sfx->cache = Z_Malloc(sizeof(sfxcache_t));
@@ -699,7 +724,18 @@ sfxcache_t* SNDMA_LoadSound (sfx_t *sfx, const char* name)
 		return NULL;
 	}
 
-	result = ma_resource_manager_data_source_init(g_audioEngine.pResourceManager, name, MA_DATA_SOURCE_FLAG_DECODE | MA_DATA_SOURCE_FLAG_ASYNC, NULL, &sc->ds);
+	notifications = ma_pipeline_notifications_init();
+
+	/* If we have a fence, use it. We'll use this to ensure  */
+	if (g_isAudioFenceInitialized) {
+		if (waitForFullDecode) {
+			notifications.done.pFence = &g_audioFence;
+		} else {
+			notifications.init.pFence = &g_audioFence;
+		}
+	}
+
+	result = ma_resource_manager_data_source_init(g_audioEngine.pResourceManager, name, MA_DATA_SOURCE_FLAG_DECODE | MA_DATA_SOURCE_FLAG_ASYNC, &notifications, &sc->ds);
 	if (result != MA_SUCCESS) {
         Com_Printf("Failed to load audio data source (%d)\n", result);
 		Z_Free(sc);

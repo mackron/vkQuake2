@@ -233,6 +233,12 @@ void SNDMA_StopAllSounds (void);
 /* Get's the current audio time. Used for scheduling sounds. */
 int SNDMA_GetTime (void);
 
+/* Begins miniaudio-specific sound registration. */
+void SNDMA_BeginRegistration (void);
+
+/* Ends miniaudio-specific sound registration. */
+void SNDMA_EndRegistration (void);
+
 /* Called when a sound needs to be loaded by the resource manager. */
 sfxcache_t* SNDMA_LoadSound (sfx_t *sfx, const char* name);
 

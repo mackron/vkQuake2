@@ -311,6 +311,8 @@ void S_BeginRegistration (void)
 {
 	s_registration_sequence++;
 	s_registering = true;
+
+	SNDMA_BeginRegistration();
 }
 
 /*
@@ -383,6 +385,8 @@ void S_EndRegistration (void)
 			continue;
 		S_LoadSound (sfx);
 	}
+
+	SNDMA_EndRegistration();
 
 	s_registering = false;
 }

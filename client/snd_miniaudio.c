@@ -19,6 +19,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 // music playback using Miniaudio library (https://github.com/dr-soft/miniaudio)
+void Com_Printf (char *fmt, ...);	/* <-- Declared here for printf() debugging in miniaudio. */
 
 #ifdef _WIN32
 #  include <windows.h>
