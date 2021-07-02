@@ -216,7 +216,7 @@ qboolean SNDMA_Init (void)
 	}
 
 	
-	engineConfig = ma_engine_config_init_default();
+	engineConfig = ma_engine_config_init();
 	engineConfig.pResourceManager = &g_audioResourceManager;
     engineConfig.allocationCallbacks = g_audioAllocationCallbacks;
 	engineConfig.periodSizeInMilliseconds = (ma_uint32)(s_latency->value * 1000);
