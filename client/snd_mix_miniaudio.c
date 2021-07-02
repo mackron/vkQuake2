@@ -181,6 +181,12 @@ static ma_vfs_callbacks g_audioEngineVFS =
 static ma_resource_manager g_audioResourceManager;
 static ma_engine g_audioEngine;
 
+void SNDMA_LogCallback(void* pUserData, ma_uint32 level, const char* pMessage)
+{
+	(void)level;
+	Com_Printf("%s", pMessage);
+}
+
 qboolean SNDMA_Init (void)
 {
 	ma_result result;
@@ -214,6 +220,8 @@ qboolean SNDMA_Init (void)
 		Com_Printf("failed to initialize resource manager\n");
 		return false;
 	}
+
+	ma_log_register_callback(ma_resource_manager_get_log(&g_audioResourceManager), ma_log_callback_init(SNDMA_LogCallback, NULL));
 
 	
 	engineConfig = ma_engine_config_init();
