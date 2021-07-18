@@ -112,7 +112,7 @@ static ma_result SNDMA_VFS_Read(ma_vfs* pVFS, ma_vfs_file file, void* pDst, size
 
 	*pBytesRead = sizeInBytes;
 
-	if (pVFSFile->sizeInBytes == pVFSFile->cursor) {
+	if (*pBytesRead == 0) {
 		return MA_AT_END;
 	}
 
@@ -723,7 +723,7 @@ void SNDMA_EndRegistration (void)
 sfxcache_t* SNDMA_LoadSound (sfx_t *sfx, const char* name)
 {
 	ma_result result;
-	ma_pipeline_notifications notifications;
+	ma_resource_manager_pipeline_notifications notifications;
 	qboolean waitForFullDecode = true;
 	sfxcache_t *sc;
 
@@ -732,7 +732,7 @@ sfxcache_t* SNDMA_LoadSound (sfx_t *sfx, const char* name)
 		return NULL;
 	}
 
-	notifications = ma_pipeline_notifications_init();
+	notifications = ma_resource_manager_pipeline_notifications_init();
 
 	/* If we have a fence, use it. We'll use this to ensure  */
 	if (g_isAudioFenceInitialized) {
@@ -743,7 +743,7 @@ sfxcache_t* SNDMA_LoadSound (sfx_t *sfx, const char* name)
 		}
 	}
 
-	result = ma_resource_manager_data_source_init(g_audioEngine.pResourceManager, name, MA_DATA_SOURCE_FLAG_DECODE | MA_DATA_SOURCE_FLAG_ASYNC, &notifications, &sc->ds);
+	result = ma_resource_manager_data_source_init(g_audioEngine.pResourceManager, name, MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_DECODE | MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_ASYNC, &notifications, &sc->ds);
 	if (result != MA_SUCCESS) {
         Com_Printf("Failed to load audio data source (%d)\n", result);
 		Z_Free(sc);
@@ -766,7 +766,7 @@ typedef struct
     ma_pcm_rb rb;
 } raw_samples_ds_t;
 
-ma_result raw_samples_ds_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead)
+static ma_result raw_samples_ds_read(ma_data_source* pDataSource, void* pFramesOut, ma_uint64 frameCount, ma_uint64* pFramesRead)
 {
     raw_samples_ds_t* rs = (raw_samples_ds_t*)pDataSource;
     ma_result result = MA_SUCCESS;
@@ -788,7 +788,7 @@ ma_result raw_samples_ds_read(ma_data_source* pDataSource, void* pFramesOut, ma_
 
         //Com_Printf("frameCount = %d; framesToRead = %d\n", (int)frameCount, (int)framesToRead);
 
-        result = ma_pcm_rb_commit_read(&rs->rb, framesToRead, pData);
+        result = ma_pcm_rb_commit_read(&rs->rb, framesToRead);
         if (result != MA_SUCCESS) {
             break;
         }
@@ -800,18 +800,19 @@ ma_result raw_samples_ds_read(ma_data_source* pDataSource, void* pFramesOut, ma_
     return result;
 }
 
-ma_result raw_samples_ds_seek(ma_data_source* pDataSource, ma_uint64 frameIndex)
+static ma_result raw_samples_ds_seek(ma_data_source* pDataSource, ma_uint64 frameIndex)
 {
     return MA_INVALID_OPERATION;    /* Cannot seek in a ring buffer. */
 }
 
-ma_result raw_samples_get_data_format(ma_data_source* pDataSource, ma_format* pFormat, ma_uint32* pChannels, ma_uint32* pSampleRate)
+ma_result raw_samples_get_data_format(ma_data_source* pDataSource, ma_format* pFormat, ma_uint32* pChannels, ma_uint32* pSampleRate, ma_channel* pChannelMap, size_t channelMapCap)
 {
     raw_samples_ds_t* rs = (raw_samples_ds_t*)pDataSource;
 
-    *pFormat   = rs->rb.format;
-    *pChannels = rs->rb.channels;
+    *pFormat     = rs->rb.format;
+    *pChannels   = rs->rb.channels;
     *pSampleRate = 0;   /* There's no notion of a sample rate in a ring buffer. */
+	ma_get_standard_channel_map(ma_standard_channel_map_default, pChannelMap, channelMapCap, rs->rb.channels);
 
     return MA_SUCCESS;
 }
@@ -820,8 +821,6 @@ static ma_data_source_vtable g_rawSamplesVTable =
 {
     raw_samples_ds_read,
     NULL,   /* onSeek() - Seeking doesn't make sense here. */
-    NULL,   /* onMap() */
-    NULL,   /* onUnmap() */
     raw_samples_get_data_format,
     NULL,   /* onGetCursor() - There's no notion of a cursor in a ring buffer. */
     NULL    /* onGetLength() - There's no notion of a length in a ring buffer. */
@@ -935,7 +934,7 @@ void SNDMA_RawSamples (int samples, int rate, int width, int channels, byte *dat
     if (g_rawSamplesConverter.config.formatIn != srcFormat || g_rawSamplesConverter.config.channelsIn != channels || g_rawSamplesConverter.config.sampleRateIn != rate) {
         /* Reinitialization of the data converter is necessary. */
         if (g_rawSamplesConverter.config.formatOut != ma_format_unknown) {
-            ma_data_converter_uninit(&g_rawSamplesConverter);
+            ma_data_converter_uninit(&g_rawSamplesConverter, &g_audioAllocationCallbacks);
         }
 
         ma_data_converter_config config;
@@ -943,7 +942,7 @@ void SNDMA_RawSamples (int samples, int rate, int width, int channels, byte *dat
         config.resampling.algorithm = ma_resample_algorithm_linear;
         config.resampling.linear.lpfOrder = 0;  /* No need to any filtering here - everything in Quake 2 is low quality anyway. */
 
-        result = ma_data_converter_init(&config, &g_rawSamplesConverter);
+        result = ma_data_converter_init(&config, &g_audioAllocationCallbacks, &g_rawSamplesConverter);
         if (result != MA_SUCCESS) {
             return; /* Failed to initialize the data converter. */
         }
@@ -969,7 +968,7 @@ void SNDMA_RawSamples (int samples, int rate, int width, int channels, byte *dat
         totalFramesWritten += framesWritten;
         totalFramesRead    += framesRead;
 
-        result = ma_pcm_rb_commit_write(&g_rawSamplesDS.rb, framesWritten, pOutputData);
+        result = ma_pcm_rb_commit_write(&g_rawSamplesDS.rb, framesWritten);
         if (result != MA_SUCCESS) {
             break;
         }
