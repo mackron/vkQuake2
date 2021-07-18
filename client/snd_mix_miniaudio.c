@@ -745,8 +745,9 @@ sfxcache_t* SNDMA_LoadSound (sfx_t *sfx, const char* name)
 
 	result = ma_resource_manager_data_source_init(g_audioEngine.pResourceManager, name, MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_DECODE | MA_RESOURCE_MANAGER_DATA_SOURCE_FLAG_ASYNC, &notifications, &sc->ds);
 	if (result != MA_SUCCESS) {
-        Com_Printf("Failed to load audio data source (%d)\n", result);
+        Com_Printf("Failed to load audio data source. %s\n", ma_result_description(result));
 		Z_Free(sc);
+		sc = sfx->cache = NULL;
 		return NULL;
 	}
 
