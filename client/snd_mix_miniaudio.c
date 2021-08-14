@@ -813,7 +813,7 @@ ma_result raw_samples_get_data_format(ma_data_source* pDataSource, ma_format* pF
     *pFormat     = rs->rb.format;
     *pChannels   = rs->rb.channels;
     *pSampleRate = 0;   /* There's no notion of a sample rate in a ring buffer. */
-	ma_get_standard_channel_map(ma_standard_channel_map_default, pChannelMap, channelMapCap, rs->rb.channels);
+	ma_channel_map_init_standard(ma_standard_channel_map_default, pChannelMap, channelMapCap, rs->rb.channels);
 
     return MA_SUCCESS;
 }
@@ -932,9 +932,9 @@ void SNDMA_RawSamples (int samples, int rate, int width, int channels, byte *dat
     to use a persistent data converter for this. When the input data changes, we'll just reinit
     the data converter.
     */
-    if (g_rawSamplesConverter.config.formatIn != srcFormat || g_rawSamplesConverter.config.channelsIn != channels || g_rawSamplesConverter.config.sampleRateIn != rate) {
+    if (g_rawSamplesConverter.formatIn != srcFormat || g_rawSamplesConverter.channelsIn != channels || g_rawSamplesConverter.sampleRateIn != rate) {
         /* Reinitialization of the data converter is necessary. */
-        if (g_rawSamplesConverter.config.formatOut != ma_format_unknown) {
+        if (g_rawSamplesConverter.formatOut != ma_format_unknown) {
             ma_data_converter_uninit(&g_rawSamplesConverter, &g_audioAllocationCallbacks);
         }
 
