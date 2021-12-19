@@ -32,10 +32,8 @@ void Com_Printf (char *fmt, ...);	/* <-- Declared here for printf() debugging in
 
 #include "miniaudio/stb_vorbis.c" /* Enables OGG/Vorbis decoding. */
 
-#define MA_EXPERIMENTAL__DATA_LOOPING_AND_CHAINING
 #define MINIAUDIO_IMPLEMENTATION
 #include "../external/miniaudio/miniaudio.h"
-#include "../external/miniaudio/research/miniaudio_engine.h"
 
 #include "../client/client.h"
 

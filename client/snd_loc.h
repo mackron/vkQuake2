@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 /* Implemented in snd_miniaudio.c */
 #include "../external/miniaudio/miniaudio.h"
-#include "../external/miniaudio/research/miniaudio_engine.h"
 
 // !!! if this is changed, the asm code must change !!!
 typedef struct
@@ -184,7 +183,6 @@ BEGIN MINIAUDIO MIXING
 ===============================================================================
 */
 #include "../external/miniaudio/miniaudio.h"
-#include "../external/miniaudio/research/miniaudio_engine.h"
 
 extern cvar_t *s_mixer;
 extern cvar_t *s_latency;
